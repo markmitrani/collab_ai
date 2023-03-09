@@ -129,6 +129,7 @@ class BaselineAgent(ArtificialBrain):
                 self._carryingTogether = False
         # If carrying a victim together, let agent be idle (because joint actions are essentially carried out by the human)
         if self._carryingTogether == True:
+            trustBeliefs[self._humanName]['willingness'] += 0.10
             return None, {}
 
         # Send the hidden score message for displaying and logging the score during the task, DO NOT REMOVE THIS
@@ -197,8 +198,12 @@ class BaselineAgent(ArtificialBrain):
                         # Rescue together when victim is critical or when the human is weak and the victim is mildly injured
                         if 'critical' in vic or 'mild' in vic and self._condition=='weak':
                             self._rescue = 'together'
+                            trustBeliefs[self._humanName]['willingness'] += 0.10
+                            trustBeliefs[self._humanName]['competence'] -= 0.10
                         # Rescue alone if the victim is mildly injured and the human not weak
                         if 'mild' in vic and self._condition!='weak':
+                            trustBeliefs[self._humanName]['willingness'] -= 0.05
+                            trustBeliefs[self._humanName]['competence'] += 0.10
                             self._rescue = 'alone'
                         # Plan path to victim because the exact location is known (i.e., the agent found this victim)
                         if 'location' in self._foundVictimLocs[vic].keys():
@@ -222,6 +227,7 @@ class BaselineAgent(ArtificialBrain):
                                    and room['room_name'] not in self._tosearch]
                 # If all areas have been searched but the task is not finished, start searching areas again
                 if self._remainingZones and len(unsearchedRooms) == 0:
+                    trustBeliefs[self._humanName]['willingness'] -= 0.50
                     self._tosearch = []
                     self._searchedRooms = []
                     self._sendMessages = []
@@ -304,7 +310,6 @@ class BaselineAgent(ArtificialBrain):
                         return action, {}
                     # Identify and remove obstacles if they are blocking the entrance of the area
                     self._phase = Phase.REMOVE_OBSTACLE_IF_NEEDED
-
             if Phase.REMOVE_OBSTACLE_IF_NEEDED == self._phase:
                 objects = []
                 agent_location = state[self.agent_id]['location']
@@ -335,6 +340,7 @@ class BaselineAgent(ArtificialBrain):
                                 return None, {}
                             # Tell the human to remove the obstacle when he/she arrives
                             if state[{'is_human_agent': True}]:
+                                trustBeliefs[self._humanName]['willingness'] += 0.10
                                 self._sendMessage('Lets remove rock blocking ' + str(self._door['room_name']) + '!','RescueBot')
                                 return None, {}
                         # Remain idle untill the human communicates what to do with the identified obstacle 
@@ -393,6 +399,7 @@ class BaselineAgent(ArtificialBrain):
                             self._sendMessage('Removing stones blocking ' + str(self._door['room_name']) + '.','RescueBot')
                             self._phase = Phase.ENTER_ROOM
                             self._remove = False
+                            trustBeliefs[self._humanName]['willingness'] -= 0.05
                             return RemoveObject.__name__, {'object_id': info['obj_id']}
                         # Remove the obstacle together if the human decides so
                         if self.received_messages_content and self.received_messages_content[-1] == 'Remove together' or self._remove:
@@ -405,6 +412,7 @@ class BaselineAgent(ArtificialBrain):
                             # Tell the human to remove the obstacle when he/she arrives
                             if state[{'is_human_agent': True}]:
                                 self._sendMessage('Lets remove stones blocking ' + str(self._door['room_name']) + '!','RescueBot')
+                                trustBeliefs[self._humanName]['willingness'] += 0.1
                                 return None, {}
                         # Remain idle until the human communicates what to do with the identified obstacle
                         else:
@@ -799,13 +807,36 @@ class BaselineAgent(ArtificialBrain):
         '''
         Baseline implementation of a trust belief. Creates a dictionary with trust belief scores for each team member, for example based on the received messages.
         '''
-        # Update the trust value based on for example the received messages
+        # If 10 seconds pass since the task started and the human hasn't sent any messages, minimize willingness
+        # if self._tick >= 200 and not receivedMessages:
+        #     trustBeliefs[self._humanName]['willingness'] = -1
+
+        # Set the competence values depending on the strength of the human
+        if self._condition == 'weak':
+            trustBeliefs[self._humanName]['competence'] = -1
+
+        if self._condition == 'normal':
+            trustBeliefs[self._humanName]['competence'] = 0
+
+        if self._condition == 'strong':
+            trustBeliefs[self._humanName]['competence'] = 1
+        # Update the trust value a bit based on received messages
         for message in receivedMessages:
-            # Increase agent trust in a team member that rescued a victim
+            # Increase agent competence in a team member that rescued a victim
             if 'Collect' in message:
-                trustBeliefs[self._humanName]['competence']+=0.10
-                # Restrict the competence belief to a range of -1 to 1
-                trustBeliefs[self._humanName]['competence'] = np.clip(trustBeliefs[self._humanName]['competence'], -1, 1)
+                trustBeliefs[self._humanName]['competence'] += 0.10
+            # Increase agent willingness in a team member that announces their findings
+            if 'Found:' in message:
+                trustBeliefs[self._humanName]['willingness'] += 0.10
+            if 'Search:' in message:
+                probability_of_verifying = 1 - (trustBeliefs[self._humanName]['willingness'] + 1) / 2
+                if random.random() <= probability_of_verifying:
+                    trustBeliefs[self._humanName]['willingness'] += 0.10
+
+
+        # Restrict the competence belief to a range of -1 to 1
+        trustBeliefs[self._humanName]['competence'] = np.clip(trustBeliefs[self._humanName]['competence'], -1, 1)
+        trustBeliefs[self._humanName]['willingness'] = np.clip(trustBeliefs[self._humanName]['willingness'], -1, 1)
         # Save current trust belief values so we can later use and retrieve them to add to a csv file with all the logged trust belief values
         with open(folder + '/beliefs/currentTrustBelief.csv', mode='w') as csv_file:
             csv_writer = csv.writer(csv_file, delimiter=';', quotechar='"', quoting=csv.QUOTE_MINIMAL)
