@@ -710,6 +710,7 @@ class BaselineAgent(ArtificialBrain):
         for mssgs in receivedMessages.values():
             for msg in mssgs:
                 # If a received message involves team members searching areas, add these areas to the memory of areas that have been explored
+                # TODO if human's willingness is low, don't directly add to searchedRooms. Add to verifyRooms, and then verify in decideOnActions.
                 if msg.startswith("Search:"):
                     area = 'area ' + msg.split()[-1]
                     if area not in self._searchedRooms:
@@ -828,15 +829,13 @@ class BaselineAgent(ArtificialBrain):
         for message in receivedMessages:
             # Increase agent trust in a team member that rescued a victim
             if 'Collect' in message:
-                trustBeliefs[self._humanName]['competence']+=0.10
-                # Restrict the competence belief to a range of -1 to 1
-                trustBeliefs[self._humanName]['competence'] = np.clip(trustBeliefs[self._humanName]['competence'], -1, 1)
+                trustBeliefs[self._humanName]['competence'] += 0.10
 
             # Increase agent willingness in a team member that announces their findings
             if 'Found:' in message:
                 trustBeliefs[self._humanName]['willingness'] += 0.10
                 trustBeliefs[self._humanName]['competence'] += 0.10
-                
+
             if 'Search:' in message:
                 trustBeliefs[self._humanName]['willingness'] += 0.10
 
@@ -866,17 +865,14 @@ class BaselineAgent(ArtificialBrain):
             # Make a plan to rescue a found critically injured victim if the human decides so
             if 'Rescue' in message and 'critical' in self._recentVic:
                 trustBeliefs[self._humanName]['willingness'] += 0.10
-                trustBeliefs[self._humanName]['competence'] += 0.10
 
             # Make a plan to rescue a found mildly injured victim together if the human decides so
             if 'Rescue together' in message and 'mild' in self._recentVic:
                 trustBeliefs[self._humanName]['willingness'] += 0.10
-                trustBeliefs[self._humanName]['competence'] += 0.10
 
             # Make a plan to rescue the mildly injured victim alone if the human decides so, and communicate this to the human
             if 'Rescue alone' in message and 'mild' in self._recentVic:
-                trustBeliefs[self._humanName]['willingness'] += 0.10
-                trustBeliefs[self._humanName]['competence'] += 0.10
+                    trustBeliefs[self._humanName]['willingness'] -= 0.10
 
 
         # Restrict the competence belief to a range of -1 to 1
