@@ -97,6 +97,31 @@ class BaselineAgent(ArtificialBrain):
         trustBeliefs = self._loadBelief(self._teamMembers, self._folder)
         self._trustBelief(self._teamMembers, trustBeliefs, self._folder, self._receivedMessages)
 
+        # Check for current state of trust to help robot's decision in phases
+
+        doHardStuffAlone = False
+        askForHelpOnly = False
+        doItYourself = False
+        humanIsLying = False
+
+        if trustBeliefs[self._humanName]['willingness'] > 0:
+            if trustBeliefs[self._humanName]['competence'] < 0:
+                probability_of_doing_hard_stuff_alone = 1 - (trustBeliefs[self._humanName]['competence'] + 1) / 2
+                if random.random() <= probability_of_doing_hard_stuff_alone:
+                    doHardStuffAlone = True
+        else:
+            probability_of_assigning_true = 1 - (trustBeliefs[self._humanName]['willingness'] + 1) / 2
+            if random.random() <= probability_of_assigning_true:
+                humanIsLying = True
+            if trustBeliefs[self._humanName]['competence'] > 0:
+                probability_of_only_asking_for_help = 1 - (trustBeliefs[self._humanName]['competence'] + 1) / 2
+                if random.random() <= probability_of_only_asking_for_help:
+                    askForHelpOnly = True
+            else:
+                probability_of_doing_everything_alone = 1 - (trustBeliefs[self._humanName]['competence'] + 1) / 2
+                if random.random() <= probability_of_doing_everything_alone and humanIsLying:
+                    doItYourself = True
+
         # Check whether human is close in distance
         if state[{'is_human_agent': True}]:
             self._distanceHuman = 'close'
@@ -806,6 +831,57 @@ class BaselineAgent(ArtificialBrain):
                 trustBeliefs[self._humanName]['competence']+=0.10
                 # Restrict the competence belief to a range of -1 to 1
                 trustBeliefs[self._humanName]['competence'] = np.clip(trustBeliefs[self._humanName]['competence'], -1, 1)
+                trustBeliefs[self._humanName]['willingness'] += 0.10
+                trustBeliefs[self._humanName]['competence'] += 0.10
+            # Increase agent willingness in a team member that announces their findings
+            if 'Found:' in message:
+                trustBeliefs[self._humanName]['willingness'] += 0.10
+                trustBeliefs[self._humanName]['competence'] += 0.10
+            if 'Search:' in message:
+                trustBeliefs[self._humanName]['willingness'] += 0.10
+
+            # Determine the next area to explore if the human tells the agent not to remove the obstacle
+            if 'Continue' in message and not self._remove:
+                trustBeliefs[self._humanName]['willingness'] -= 0.10
+
+            # Continue searching other areas if the human decides so
+            if 'Continue' in message:
+                trustBeliefs[self._humanName]['willingness'] += 0.10
+                trustBeliefs[self._humanName]['competence'] += 0.10
+
+            # Wait for the human to help removing the obstacle and remove the obstacle together
+            # for with obstacles that human can't help
+            if 'Remove' in message or self._remove:
+                trustBeliefs[self._humanName]['willingness'] += 0.10
+
+            # Remove the obstacle alone if the human decides so
+            if 'Remove alone' in message and not self._remove:
+                trustBeliefs[self._humanName]['willingness'] -= 0.10
+
+            # Remove the obstacle together if the human decides so
+            if 'Remove together' in message and not self._remove:
+                trustBeliefs[self._humanName]['willingness'] += 0.10
+                trustBeliefs[self._humanName]['competence'] += 0.10
+
+            # Make a plan to rescue a found critically injured victim if the human decides so
+            if 'Rescue' in message and 'critical' in self._recentVic:
+                trustBeliefs[self._humanName]['willingness'] += 0.10
+                trustBeliefs[self._humanName]['competence'] += 0.10
+
+            # Make a plan to rescue a found mildly injured victim together if the human decides so
+            if 'Rescue together' in message and 'mild' in self._recentVic:
+                trustBeliefs[self._humanName]['willingness'] += 0.10
+                trustBeliefs[self._humanName]['competence'] += 0.10
+
+            # Make a plan to rescue the mildly injured victim alone if the human decides so, and communicate this to the human
+            if 'Rescue alone' in message and 'mild' in self._recentVic:
+                trustBeliefs[self._humanName]['willingness'] += 0.10
+                trustBeliefs[self._humanName]['competence'] += 0.10
+
+
+        # Restrict the competence belief to a range of -1 to 1
+        trustBeliefs[self._humanName]['competence'] = np.clip(trustBeliefs[self._humanName]['competence'], -1, 1)
+        trustBeliefs[self._humanName]['willingness'] = np.clip(trustBeliefs[self._humanName]['willingness'], -1, 1)
         # Save current trust belief values so we can later use and retrieve them to add to a csv file with all the logged trust belief values
         with open(folder + '/beliefs/currentTrustBelief.csv', mode='w') as csv_file:
             csv_writer = csv.writer(csv_file, delimiter=';', quotechar='"', quoting=csv.QUOTE_MINIMAL)
