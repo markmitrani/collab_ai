@@ -831,12 +831,12 @@ class BaselineAgent(ArtificialBrain):
                 trustBeliefs[self._humanName]['competence']+=0.10
                 # Restrict the competence belief to a range of -1 to 1
                 trustBeliefs[self._humanName]['competence'] = np.clip(trustBeliefs[self._humanName]['competence'], -1, 1)
-                trustBeliefs[self._humanName]['willingness'] += 0.10
-                trustBeliefs[self._humanName]['competence'] += 0.10
+
             # Increase agent willingness in a team member that announces their findings
             if 'Found:' in message:
                 trustBeliefs[self._humanName]['willingness'] += 0.10
                 trustBeliefs[self._humanName]['competence'] += 0.10
+                
             if 'Search:' in message:
                 trustBeliefs[self._humanName]['willingness'] += 0.10
 
