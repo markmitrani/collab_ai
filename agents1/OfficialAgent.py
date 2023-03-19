@@ -71,6 +71,8 @@ class BaselineAgent(ArtificialBrain):
         self._receivedMessages = []
         self._moving = False
         self._humanSearchedRooms = []
+        self._numOfProcessedMessages = -1
+        self._startGame = True
 
     def initialize(self):
         # Initialization of the state tracker and navigation algorithm
@@ -92,11 +94,18 @@ class BaselineAgent(ArtificialBrain):
             for member in self._teamMembers:
                 if mssg.from_id == member and mssg.content not in self._receivedMessages:
                     self._receivedMessages.append(mssg.content)
-        # Process messages from team members
-        self._processMessages(state, self._teamMembers, self._condition)
-        # Initialize and update trust beliefs for team members
-        trustBeliefs = self._loadBelief(self._teamMembers, self._folder)
+
+        if self._startGame:
+            trustBeliefs = self._loadBelief(self._teamMembers, self._folder)
+            self._startGame = False
+        else:
+            trustBeliefs = self._loadCurrentBelief(self._teamMembers, self._folder)
+
         self._trustBelief(self._teamMembers, trustBeliefs, self._folder, self._receivedMessages)
+
+        # Process messages from team members
+        self._processMessages(state, self._teamMembers, self._condition, trustBeliefs)
+        # Initialize and update trust beliefs for team members
 
         # Check for current state of trust to help robot's decision in phases
         probabilityOfIncompetence = 1 - ((trustBeliefs[self._humanName]['competence'] + 1) / 2)
@@ -753,12 +762,11 @@ class BaselineAgent(ArtificialBrain):
                 zones.append(place)
         return zones
 
-    def _processMessages(self, state, teamMembers, condition):
+    def _processMessages(self, state, teamMembers, condition, trustBeliefs):
         '''
         process incoming messages received from the team members
         '''
 
-        trustBeliefs = self._loadBelief(self._teamMembers, self._folder)
         probabilityOfLying = 1 - (trustBeliefs[self._humanName]['willingness'] + 1) / 2
 
         receivedMessages = {}
@@ -865,6 +873,7 @@ class BaselineAgent(ArtificialBrain):
                 self._humanLoc = int(mssgs[-1].split()[-1])
 
     def _loadBelief(self, members, folder):
+        print("In load belief")
         '''
         Loads trust belief values if agent already collaborated with human before, otherwise trust belief values are initialized using default values.
         '''
@@ -887,11 +896,41 @@ class BaselineAgent(ArtificialBrain):
                     competence = float(row[1])
                     willingness = float(row[2])
                     trustBeliefs[name] = {'competence': competence, 'willingness': willingness}
+                    break
                 # Initialize default trust values
                 if row and row[0]!=self._humanName:
                     competence = default
                     willingness = default
                     trustBeliefs[self._humanName] = {'competence': competence, 'willingness': willingness}
+
+        with open(folder + '/beliefs/currentTrustBelief.csv', mode='w') as csv_file:
+            csv_writer = csv.writer(csv_file, delimiter=';', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+            csv_writer.writerow(['name', 'competence', 'willingness'])
+            csv_writer.writerow([self._humanName, trustBeliefs[self._humanName]['competence'],
+                                 trustBeliefs[self._humanName]['willingness']])
+        return trustBeliefs
+
+    def _loadCurrentBelief(self, members, folder):
+        '''
+        Loads trust belief values of the current agent
+        '''
+        # Create a dictionary with trust values for current team member
+        trustBeliefs = {}
+        # Set a default starting trust value
+        trustfile_header = []
+        # Load the trust values of current human
+        with open(folder+'/beliefs/currentTrustBelief.csv') as csvfile:
+            reader = csv.reader(csvfile, delimiter=';', quotechar="'")
+            for row in reader:
+                if trustfile_header==[]:
+                    trustfile_header=row
+                    continue
+                # Retrieve trust values
+                if row and row[0]==self._humanName:
+                    name = row[0]
+                    competence = float(row[1])
+                    willingness = float(row[2])
+                    trustBeliefs[name] = {'competence': competence, 'willingness': willingness}
         return trustBeliefs
 
     def _trustBelief(self, members, trustBeliefs, folder, receivedMessages):
@@ -899,54 +938,56 @@ class BaselineAgent(ArtificialBrain):
         Baseline implementation of a trust belief. Creates a dictionary with trust belief scores for each team member, for example based on the received messages.
         '''
         # Update the trust value based on for example the received messages
-        #for message in receivedMessages:
-            # Increase agent trust in a team member that rescued a victim
-            # if 'Collect' in message:
-            #     trustBeliefs[self._humanName]['competence'] += 0.10
-            #
-            # # Increase agent willingness in a team member that announces their findings
-            # if 'Found:' in message:
-            #     trustBeliefs[self._humanName]['willingness'] += 0.10
-            #     trustBeliefs[self._humanName]['competence'] += 0.10
-            #
-            # if 'Search:' in message:
-            #     trustBeliefs[self._humanName]['willingness'] += 0.10
-            #
-            # # Determine the next area to explore if the human tells the agent not to remove the obstacle
-            # if 'Continue' in message and not self._remove:
-            #     trustBeliefs[self._humanName]['willingness'] -= 0.10
-            #
-            # # Continue searching other areas if the human decides so
-            # if 'Continue' in message:
-            #     trustBeliefs[self._humanName]['willingness'] += 0.10
-            #     trustBeliefs[self._humanName]['competence'] += 0.10
-            #
-            # # Wait for the human to help removing the obstacle and remove the obstacle together
-            # # for with obstacles that human can't help
-            # if 'Remove' in message or self._remove:
-            #     trustBeliefs[self._humanName]['willingness'] += 0.10
-            #
-            # # Remove the obstacle alone if the human decides so
-            # if 'Remove alone' in message and not self._remove:
-            #     trustBeliefs[self._humanName]['willingness'] -= 0.10
-            #
-            # # Remove the obstacle together if the human decides so
-            # if 'Remove together' in message and not self._remove:
-            #     trustBeliefs[self._humanName]['willingness'] += 0.10
-            #     trustBeliefs[self._humanName]['competence'] += 0.10
-            #
-            # # Make a plan to rescue a found critically injured victim if the human decides so
-            # if 'Rescue' in message and 'critical' in self._recentVic:
-            #     trustBeliefs[self._humanName]['willingness'] += 0.10
-            #
-            # # Make a plan to rescue a found mildly injured victim together if the human decides so
-            # if 'Rescue together' in message and 'mild' in self._recentVic:
-            #     trustBeliefs[self._humanName]['willingness'] += 0.10
-            #
-            # # Make a plan to rescue the mildly injured victim alone if the human decides so, and communicate this to the human
-            # if 'Rescue alone' in message and 'mild' in self._recentVic:
-            #         trustBeliefs[self._humanName]['willingness'] -= 0.10
-            #
+        for i, message in enumerate(receivedMessages):
+            if i >= self._numOfProcessedMessages:
+                if "Search:" in message:
+                    trustBeliefs[self._humanName]['willingness'] += 0.10
+                    trustBeliefs[self._humanName]['competence'] += 0.10
+                    print(trustBeliefs[self._humanName]['willingness'], trustBeliefs[self._humanName]['competence'])
+
+                if "Rescue alone" in message:
+                    trustBeliefs[self._humanName]['willingness'] -= 0.10
+
+                # Increase agent willingness in a team member that announces their findings
+                if 'Found:' in message:
+                    trustBeliefs[self._humanName]['willingness'] += 0.10
+                    trustBeliefs[self._humanName]['competence'] += 0.10
+
+                # Continue searching other areas if the human decides so
+                if 'Continue' in message:
+                    trustBeliefs[self._humanName]['willingness'] += 0.10
+                    trustBeliefs[self._humanName]['competence'] += 0.10
+
+                # Increase agent trust in a team member that rescued a victim
+                if 'Collect' in message:
+                    trustBeliefs[self._humanName]['competence'] += 0.10
+
+                # Remove an obstacle (mandatory)
+                if "Remove:" in message and "together" not in message and "alone" not in message:
+                    trustBeliefs[self._humanName]['willingness'] += 0.10
+
+                # Remove the obstacle alone if the human decides so
+                if 'Remove alone' in message and not self._remove:
+                    trustBeliefs[self._humanName]['willingness'] -= 0.10
+
+                # Remove the obstacle together if the human decides so
+                if 'Remove together' in message and not self._remove:
+                    trustBeliefs[self._humanName]['willingness'] += 0.10
+                    trustBeliefs[self._humanName]['competence'] += 0.10
+
+                # Make a plan to rescue a found critically injured victim if the human decides so
+                if 'Rescue' in message and 'critical' in self._recentVic:
+                    trustBeliefs[self._humanName]['willingness'] += 0.10
+
+                # Make a plan to rescue a found mildly injured victim together if the human decides so
+                if 'Rescue together' in message and 'mild' in self._recentVic:
+                    trustBeliefs[self._humanName]['willingness'] += 0.10
+
+                # Make a plan to rescue the mildly injured victim alone if the human decides so, and communicate this to the human
+                if 'Rescue alone' in message and 'mild' in self._recentVic:
+                    trustBeliefs[self._humanName]['willingness'] -= 0.10
+
+        self._numOfProcessedMessages = len(receivedMessages)
 
         # Restrict the competence belief to a range of -1 to 1
         trustBeliefs[self._humanName]['competence'] = np.clip(trustBeliefs[self._humanName]['competence'], -1, 1)
@@ -955,9 +996,7 @@ class BaselineAgent(ArtificialBrain):
         with open(folder + '/beliefs/currentTrustBelief.csv', mode='w') as csv_file:
             csv_writer = csv.writer(csv_file, delimiter=';', quotechar='"', quoting=csv.QUOTE_MINIMAL)
             csv_writer.writerow(['name','competence','willingness'])
-            # csv_writer.writerow([self._humanName,trustBeliefs[self._humanName]['competence'],trustBeliefs[self._humanName]['willingness']])
-            csv_writer.writerow([self._humanName, 1, 0])
-
+            csv_writer.writerow([self._humanName,trustBeliefs[self._humanName]['competence'],trustBeliefs[self._humanName]['willingness']])
         return trustBeliefs
 
     def _sendMessage(self, mssg, sender):
