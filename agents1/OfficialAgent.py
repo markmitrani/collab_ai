@@ -940,52 +940,58 @@ class BaselineAgent(ArtificialBrain):
         # Update the trust value based on for example the received messages
         for i, message in enumerate(receivedMessages):
             if i >= self._numOfProcessedMessages:
+
                 if "Search:" in message:
-                    trustBeliefs[self._humanName]['willingness'] += 0.10
-                    trustBeliefs[self._humanName]['competence'] += 0.10
-                    print(trustBeliefs[self._humanName]['willingness'], trustBeliefs[self._humanName]['competence'])
+                    location = "area " + message[8:]
+                    print(self._searchedRooms)
+                    if location in self._searchedRooms:
+                        trustBeliefs[self._humanName]['willingness'] -= 0.10
+                    else:
+                        trustBeliefs[self._humanName]['willingness'] += 0.10
 
                 if "Rescue alone" in message:
                     trustBeliefs[self._humanName]['willingness'] -= 0.10
 
                 # Increase agent willingness in a team member that announces their findings
-                if 'Found:' in message:
-                    trustBeliefs[self._humanName]['willingness'] += 0.10
-                    trustBeliefs[self._humanName]['competence'] += 0.10
+                if "Found:" in message or "Collect:" in message:
+                    sub_message = message.split()
+                    victim = sub_message[1] + " " + sub_message[2] + " " + sub_message[3]
+                    if victim in self._collectedVictims:
+                        trustBeliefs[self._humanName]['willingness'] -= 0.15
+                    else:
+                        trustBeliefs[self._humanName]['willingness'] += 0.10
 
-                # Continue searching other areas if the human decides so
-                if 'Continue' in message:
-                    trustBeliefs[self._humanName]['willingness'] += 0.10
-                    trustBeliefs[self._humanName]['competence'] += 0.10
-
-                # Increase agent trust in a team member that rescued a victim
-                if 'Collect' in message:
-                    trustBeliefs[self._humanName]['competence'] += 0.10
+                if "Continue" in message:
+                    if self._recentVic is not None:
+                        if "critical" in self._recentVic:
+                            trustBeliefs[self._humanName]['willingness'] -= 0.20
+                        else:
+                            trustBeliefs[self._humanName]['willingness'] -= 0.05
+                    else:
+                        trustBeliefs[self._humanName]['willingness'] += 0.05
 
                 # Remove an obstacle (mandatory)
-                if "Remove:" in message and "together" not in message and "alone" not in message:
-                    trustBeliefs[self._humanName]['willingness'] += 0.10
+                if "Remove:" in message:
+                    if "together" in message:
+                        trustBeliefs[self._humanName]['willingness'] += 0.10
+                        trustBeliefs[self._humanName]['competence'] += 0.10
+                    else:
+                        if "alone" in message:
+                            trustBeliefs[self._humanName]['willingness'] -= 0.10
+                        else:
+                            trustBeliefs[self._humanName]['willingness'] += 0.10
 
-                # Remove the obstacle alone if the human decides so
-                if 'Remove alone' in message and not self._remove:
-                    trustBeliefs[self._humanName]['willingness'] -= 0.10
+                # Rescue a victim
+                if 'Rescue' in message:
+                    if 'together' in message:
+                        trustBeliefs[self._humanName]['willingness'] += 0.10
+                        trustBeliefs[self._humanName]['competence'] += 0.10
+                    else:
+                        if "alone" in message:
+                            trustBeliefs[self._humanName]['willingness'] -= 0.10
+                        else:
+                            trustBeliefs[self._humanName]['willingness'] += 0.10
 
-                # Remove the obstacle together if the human decides so
-                if 'Remove together' in message and not self._remove:
-                    trustBeliefs[self._humanName]['willingness'] += 0.10
-                    trustBeliefs[self._humanName]['competence'] += 0.10
-
-                # Make a plan to rescue a found critically injured victim if the human decides so
-                if 'Rescue' in message and 'critical' in self._recentVic:
-                    trustBeliefs[self._humanName]['willingness'] += 0.10
-
-                # Make a plan to rescue a found mildly injured victim together if the human decides so
-                if 'Rescue together' in message and 'mild' in self._recentVic:
-                    trustBeliefs[self._humanName]['willingness'] += 0.10
-
-                # Make a plan to rescue the mildly injured victim alone if the human decides so, and communicate this to the human
-                if 'Rescue alone' in message and 'mild' in self._recentVic:
-                    trustBeliefs[self._humanName]['willingness'] -= 0.10
 
         self._numOfProcessedMessages = len(receivedMessages)
 
