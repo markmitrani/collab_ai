@@ -345,20 +345,21 @@ class BaselineAgent(ArtificialBrain):
 
             if Phase.REMOVE_OBSTACLE_IF_NEEDED == self._phase:
                 objects = []
+
                 agent_location = state[self.agent_id]['location']
                 # Identify which obstacle is blocking the entrance
                 for info in state.values():
                     if 'class_inheritance' in info and 'ObstacleObject' in info['class_inheritance'] and 'rock' in info['obj_id']:
                         objects.append(info)
 
-                        # if the human is incompetent the robot can skip this rock and go to another room
-                        if 0.5<=probabilityOfIncompetence:
-                            print('Ignoring big rock.')
-                            # Add area to the to do list
-                            self._waiting = False
-                            self._tosearch.append(self._door['room_name'])
-                            self._phase = Phase.FIND_NEXT_GOAL
-                            return None, {}
+                        # # if the human is incompetent the robot can skip this rock and go to another room
+                        # if 0.5<=probabilityOfIncompetence and not self.received_messages_content.startswith('Remove:'):
+                        #     print('Ignoring big rock.')
+                        #     # Add area to the to do list
+                        #     self._waiting = False
+                        #     self._tosearch.append(self._door['room_name'])
+                        #     self._phase = Phase.FIND_NEXT_GOAL
+                        #     return None, {}
 
                         # Communicate which obstacle is blocking the entrance
                         if self._answered == False and not self._remove and not self._waiting:
@@ -528,6 +529,8 @@ class BaselineAgent(ArtificialBrain):
 
             if Phase.FOLLOW_ROOM_SEARCH_PATH == self._phase:
 
+                rescueAlone = False
+
                 # Search the area
                 self._state_tracker.update(state)
                 action = self._navigator.get_move_action(self._state_tracker)
@@ -564,12 +567,11 @@ class BaselineAgent(ArtificialBrain):
 
                                 # Communicate which victim the agent found and ask the human whether to rescue the victim now or at a later stage
                                 if 'mild' in vic and self._answered == False and not self._waiting:
-
                                     if 0.5 <= probabilityOfIncompetence:
                                         print('rescue victim alone decision')
-                                        self.send_message('I found '+ vic +' in '+ self._door['room_name']+'. I am rescuing alone.','RescueBot')
-                                        willRescueAlone = True
                                         self._waiting = False
+                                        self._answered = True
+                                        rescueAlone = True
                                     else:
                                         self._sendMessage('Found ' + vic + ' in ' + self._door['room_name'] + '. Please decide whether to "Rescue together", "Rescue alone", or "Continue" searching. \n \n \
                                             Important features to consider are: \n safe - victims rescued: ' + str(self._collectedVictims) + '\n explore - areas searched: area ' + str(self._searchedRooms).replace('area ','') + '\n \
@@ -612,15 +614,6 @@ class BaselineAgent(ArtificialBrain):
                     self._recentVic = None
                     self._phase = Phase.PLAN_PATH_TO_VICTIM
 
-                # RescueBot rescues alone if the probability was triggered above
-                # if willRescueAlone and 'mild' in self._recentVic:
-                #     print('Rescue victim alone action')
-                #     self._sendMessage('Picking up ' + self._recentVic + ' in ' + self._door['room_name'] + '.','RescueBot')
-                #     self._rescue = 'alone'
-                #     self._recentVic = None
-                #     self._waiting = False
-                #     self._phase = Phase.FIND_NEXT_GOAL
-
                 # Make a plan to rescue a found mildly injured victim together if the human decides so
                 if self.received_messages_content and self.received_messages_content[-1] == 'Rescue together' and 'mild' in self._recentVic:
                     self._rescue = 'together'
@@ -635,6 +628,16 @@ class BaselineAgent(ArtificialBrain):
                     self._goalVic = self._recentVic
                     self._recentVic = None
                     self._phase = Phase.PLAN_PATH_TO_VICTIM
+
+                if rescueAlone and 'mild' in self._recentVic:
+                    print('entered here')
+                    #self._sendMessage('Picking up ' + self._recentVic + ' in ' + self._door['room_name'] + '.')
+                    self._rescue = 'alone'
+                    self._answered = True
+                    self._waiting = False
+                    self._recentVic = None
+                    self._phase = Phase.FIND_NEXT_GOAL
+
                 # Make a plan to rescue the mildly injured victim alone if the human decides so, and communicate this to the human
                 if self.received_messages_content and self.received_messages_content[-1] == 'Rescue alone' and 'mild' in self._recentVic:
                     print('entered here')
