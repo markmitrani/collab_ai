@@ -931,6 +931,20 @@ class BaselineAgent(ArtificialBrain):
                     competence = float(row[1])
                     willingness = float(row[2])
                     trustBeliefs[name] = {'competence': competence, 'willingness': willingness}
+
+
+        rows = list()
+
+        with open(folder+'/beliefs/allTrustBeliefs.csv', 'r') as read_csv:
+            reader_2 = csv.reader(read_csv, delimiter=';', quotechar="'")
+            for row in reader_2:
+                if row and row[0] != self._humanName:
+                    rows.append(row)
+
+        with open(folder+'/beliefs/allTrustBeliefs.csv', 'w') as write_csv:
+            csv_writer = csv.writer(write_csv, delimiter=';', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+            csv_writer.writerows(rows)
+            csv_writer.writerow([self._humanName, trustBeliefs[self._humanName]['competence'], trustBeliefs[self._humanName]['willingness']])
         return trustBeliefs
 
     def _trustBelief(self, members, trustBeliefs, folder, receivedMessages):
