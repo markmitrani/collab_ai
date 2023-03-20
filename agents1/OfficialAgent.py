@@ -949,9 +949,6 @@ class BaselineAgent(ArtificialBrain):
                     else:
                         trustBeliefs[self._humanName]['willingness'] += 0.10
 
-                if "Rescue alone" in message:
-                    trustBeliefs[self._humanName]['willingness'] -= 0.10
-
                 # Increase agent willingness in a team member that announces their findings
                 if "Found:" in message or "Collect:" in message:
                     sub_message = message.split()
