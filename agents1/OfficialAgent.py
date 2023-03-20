@@ -943,7 +943,6 @@ class BaselineAgent(ArtificialBrain):
 
                 if "Search:" in message:
                     location = "area " + message[8:]
-                    print(self._searchedRooms)
                     if location in self._searchedRooms:
                         trustBeliefs[self._humanName]['willingness'] -= 0.10
                     else:
@@ -956,16 +955,16 @@ class BaselineAgent(ArtificialBrain):
                     if victim in self._collectedVictims:
                         trustBeliefs[self._humanName]['willingness'] -= 0.15
                     else:
-                        trustBeliefs[self._humanName]['willingness'] += 0.10
+                        trustBeliefs[self._humanName]['willingness'] += 0.15
 
                 if "Continue" in message:
                     if self._recentVic is not None:
                         if "critical" in self._recentVic:
                             trustBeliefs[self._humanName]['willingness'] -= 0.20
                         else:
-                            trustBeliefs[self._humanName]['willingness'] -= 0.05
+                            trustBeliefs[self._humanName]['willingness'] -= 0.10
                     else:
-                        trustBeliefs[self._humanName]['willingness'] += 0.05
+                        trustBeliefs[self._humanName]['willingness'] -= 0.05
 
                 # Remove an obstacle (mandatory)
                 if "Remove:" in message:
@@ -981,13 +980,13 @@ class BaselineAgent(ArtificialBrain):
                 # Rescue a victim
                 if 'Rescue' in message:
                     if 'together' in message:
-                        trustBeliefs[self._humanName]['willingness'] += 0.10
-                        trustBeliefs[self._humanName]['competence'] += 0.10
+                        trustBeliefs[self._humanName]['willingness'] += 0.15
+                        trustBeliefs[self._humanName]['competence'] += 0.15
                     else:
                         if "alone" in message:
-                            trustBeliefs[self._humanName]['willingness'] -= 0.10
+                            trustBeliefs[self._humanName]['willingness'] -= 0.15
                         else:
-                            trustBeliefs[self._humanName]['willingness'] += 0.10
+                            trustBeliefs[self._humanName]['willingness'] += 0.15
 
 
         self._numOfProcessedMessages = len(receivedMessages)
